@@ -1,1 +1,92 @@
+1. Importing Dataset ke BigQuery
+Penjelasan:
+Proses pertama adalah mengimpor dataset ke dalam Google BigQuery sebagai data warehouse yang digunakan untuk menyimpan data sebelum dilakukan analisis.
+
+Dataset yang Diimpor:
+-kf_final_transaction.csv : Data Transaksi Penjualan
+-kf_inventory.csv : Data Stok Produk
+-kf_kantor_cabang.csv : Data Cabang Kimia Farma
+-kf_product.csv : Data Informasi Produk
+
+Langkah-langkah:
+-Buat Project Baru di Google Cloud Console.
+-Aktifkan layanan BigQuery API.
+-Buat dataset dengan nama: kimia_farma.
+-Upload file CSV ke BigQuery melalui menu Create Table.
+-Pastikan nama tabel sesuai dengan nama file tanpa ekstensi (.csv).
+
+2. Pembuatan Tabel Analisa
+Penjelasan:
+Tabel analisa dibuat dengan melakukan JOIN QUERY dari keempat tabel untuk menghasilkan data terintegrasi yang menjadi dasar dalam proses analisis bisnis.
+
+Query Join Tabel:
+-CREATE OR REPLACE TABLE kimia_farma.tabel_analisa AS
+SELECT
+  t.transaction_id, -- Kode unik transaksi
+  t.date, -- Tanggal transaksi
+  t.branch_id, -- ID Cabang
+  kc.branch_name, -- Nama cabang
+  kc.kota, -- Kota cabang
+  kc.provinsi, -- Provinsi cabang
+  kc.rating_cabang, -- Rating cabang
+  t.customer_name, -- Nama customer
+  t.product_id, -- ID produk
+  p.product_name, -- Nama produk
+  t.actual_price, -- Harga asli produk
+  t.discount_percentage, -- Persentase diskon
+  CASE
+    WHEN t.actual_price <= 50000 THEN 0.10 -- Persentase laba 10%
+    WHEN t.actual_price > 50000 AND t.actual_price <= 100000 THEN 0.15 -- Persentase laba 15%
+    WHEN t.actual_price > 100000 AND t.actual_price <= 300000 THEN 0.20 -- Persentase laba 20%
+    WHEN t.actual_price > 300000 AND t.actual_price <= 500000 THEN 0.25 -- Persentase laba 25%
+    ELSE 0.30 -- Persentase laba 30%
+  END AS persentase_gross_laba,
+  (t.actual_price - (t.actual_price * t.discount_percentage)) AS nett_sales, -- Harga setelah diskon
+  ((t.actual_price - (t.actual_price * t.discount_percentage)) *
+    CASE
+      WHEN t.actual_price <= 50000 THEN 0.10
+      WHEN t.actual_price > 50000 AND t.actual_price <= 100000 THEN 0.15
+      WHEN t.actual_price > 100000 AND t.actual_price <= 300000 THEN 0.20
+      WHEN t.actual_price > 300000 AND t.actual_price <= 500000 THEN 0.25
+      ELSE 0.30
+    END) AS nett_profit, -- Keuntungan bersih
+  t.rating_transaksi -- Rating transaksi
+FROM
+  `kimia_farma.kf_final_transaction` t
+JOIN
+  `kimia_farma.kf_kantor_cabang` kc ON t.branch_id = kc.branch_id
+JOIN
+  `kimia_farma.kf_product` p ON t.product_id = p.product_id;
+
+Penjelasan:
+-JOIN QUERY digunakan untuk menggabungkan tabel transaksi, cabang, dan produk.
+-CASE Statement digunakan untuk menghitung persentase laba kotor berdasarkan harga produk.
+-Kolom nett_sales dan nett_profit digunakan untuk menghitung pendapatan bersih dan keuntungan bersih.
+
+3. Validasi Data
+Penjelasan:
+Validasi dilakukan untuk memastikan bahwa data yang sudah digabungkan tidak memiliki missing value atau duplikasi.
+
+Query Validasi:
+SELECT COUNT(*) AS jumlah_data
+FROM `kimia_farma.tabel_analisa`
+WHERE transaction_id IS NULL OR branch_id IS NULL OR product_id IS NULL;
+
+#Jika hasil query = 0, berarti data bersih tanpa missing value.
+
+4. Pembuatan Dashboard Performance Analytics
+Penjelasan:
+Dashboard dibuat di Google Looker Studio dengan visualisasi interaktif untuk menampilkan hasil analisis bisnis.
+
+Komponen Dashboard:
+-Summary Data (Total Transaksi, Total Nett Sales, Total Nett Profit, dan Rating Rata-rata Cabang)
+-Filter Control untuk memfilter data berdasarkan Tahun, Provinsi, dan Cabang.
+-Top 10 Total Transaksi dan Nett Sales per Provinsi.
+-Geo Map Profit per Provinsi.
+-Top 5 Cabang dengan Rating Tertinggi Namun Transaksi Terendah.
+
+Kesimpulan
+Project ini berhasil membuat proses Performance Analytics menggunakan BigQuery dan Google Looker Studio.
+Hasil analisis memberikan insight tentang performa penjualan, keuntungan, dan kepuasan pelanggan di berbagai cabang Kimia Farma pada periode 2020-2023.
+
 
